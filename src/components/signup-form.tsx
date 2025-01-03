@@ -1,5 +1,6 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link } from "react-router-dom";
+import { supabase } from '@/supabaseClient'; 
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,7 +12,38 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function SignUpForm() {
+export function SignUpForm() { 
+  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+  
+    const { error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (signUpError) {
+      setError(signUpError.message);
+      return;
+    }
+
+    const { error: insertError } = await supabase
+      .from('user/passes')
+      .insert([{ email, username, password }]);
+
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
+
+    setError('');
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <Card className="border-purple-800 bg-[#1a1f29]">
@@ -22,18 +54,8 @@ export function SignUpForm() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form>
+          <form onSubmit={handleSubmit}>
             <div className="flex flex-col gap-6">
-              <div className="grid gap-2">
-                <Label htmlFor="username" className="text-gray-200">Username</Label>
-                <Input
-                  id="username"
-                  type="text"
-                  placeholder="gamertag"
-                  required
-                  className="border-purple-800 bg-[#0f1218] text-white placeholder:text-gray-500"
-                />
-              </div>
               <div className="grid gap-2">
                 <Label htmlFor="email" className="text-gray-200">Email</Label>
                 <Input
@@ -42,6 +64,20 @@ export function SignUpForm() {
                   placeholder="m@example.com"
                   required
                   className="border-purple-800 bg-[#0f1218] text-white placeholder:text-gray-500"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="username" className="text-gray-200">Username</Label>
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="gamertag"
+                  required
+                  className="border-purple-800 bg-[#0f1218] text-white placeholder:text-gray-500"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                 />
               </div>
               <div className="grid gap-2">
@@ -51,26 +87,16 @@ export function SignUpForm() {
                   type="password"
                   required
                   className="border-purple-800 bg-[#0f1218] text-white"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="confirm-password" className="text-gray-200">Confirm Password</Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  required
-                  className="border-purple-800 bg-[#0f1218] text-white"
-                />
-              </div>
-              <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700">
-                Create Account
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full border-purple-600 hover:bg-purple-700"
-              >
-                Sign up with Google
-              </Button>
+              {error && <p className="text-red-500">{error}</p>}
+              <Link to="/login">
+                <Button type="button" className="w-full bg-purple-600 hover:bg-purple-700">
+                  Create Account
+                </Button>
+              </Link>
             </div>
             <div className="mt-4 text-center text-sm text-gray-400">
               Already have an account?{" "}
@@ -84,5 +110,3 @@ export function SignUpForm() {
     </div>
   );
 }
-
-export default SignUpForm; 

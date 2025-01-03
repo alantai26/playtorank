@@ -1,4 +1,5 @@
 import React from 'react'
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -155,9 +156,9 @@ const PlayToRankLanding: React.FC = () => {
               placeholder="Enter your email" 
               className="max-w-xs bg-white text-gray-900"
             />
-            <Button type="submit" size="lg" className="bg-yellow-500 text-gray-900 hover:bg-yellow-600">
-              Sign Up Now
-            </Button>
+            <Link to="/signup" className="flex items-center gap-2 bg-yellow-500 text-gray-900 hover:bg-yellow-600 px-2 py-1 rounded-lg">
+            <span className="text-lg font-semibold">Sign Up Now</span>
+          </Link>
           </form>
         </div>
       </section>
@@ -165,7 +166,7 @@ const PlayToRankLanding: React.FC = () => {
       {/* Footer */}
       <footer className="bg-gray-800 py-8">
         <div className="container mx-auto px-4 text-center text-gray-400">
-          <p>&copy; 2023 Play to Rank. All rights reserved.</p>
+          <p>&copy; Placeholder</p>
         </div>
       </footer>
     </div>
