@@ -26,7 +26,7 @@ import {
 const PlayToRankLanding: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white">
-      {/* Header */}
+     
       <header className="container mx-auto px-4 py-6 flex justify-between items-center">
         <div className="flex items-center space-x-2">
           <GamepadIcon className="h-8 w-8 text-purple-500" />
@@ -64,7 +64,6 @@ const PlayToRankLanding: React.FC = () => {
         </div>
       </header>
 
-      {/* Hero Section */}
       <section className="container mx-auto px-4 py-20 text-center">
         <h1 className="text-5xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">
           Rank Your Favorite Games
@@ -82,7 +81,6 @@ const PlayToRankLanding: React.FC = () => {
         </div>
       </section>
 
-      {/* Features Section */}
       <section id="features" className="py-20">
         <div className="container mx-auto px-4">
           <h2 className="text-3xl font-bold mb-12 text-center">Why Choose Play to Rank?</h2>
@@ -111,7 +109,6 @@ const PlayToRankLanding: React.FC = () => {
         </div>
       </section>
 
-      {/* How It Works Section */}
       <section id="how-it-works" className="container mx-auto px-4 py-20">
         <h2 className="text-3xl font-bold mb-12 text-center">How It Works</h2>
         <Carousel className="max-w-5xl mx-auto">
@@ -143,7 +140,6 @@ const PlayToRankLanding: React.FC = () => {
         </Carousel>
       </section>
 
-      {/* CTA Section */}
       <section className="bg-purple-700 py-20">
         <div className="container mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold mb-6">Ready to Start Ranking?</h2>
@@ -163,7 +159,6 @@ const PlayToRankLanding: React.FC = () => {
         </div>
       </section>
 
-      {/* Footer */}
       <footer className="bg-gray-800 py-8">
         <div className="container mx-auto px-4 text-center text-gray-400">
           <p>&copy; Placeholder</p>

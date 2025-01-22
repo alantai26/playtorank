@@ -9,7 +9,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/supabaseClient";
 import {
@@ -22,6 +28,9 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+const SUPABASE_PROJECT_ID = "bcqrezetbqornuuadcer";
+const SUPABASE_STORAGE_BUCKET = "bukcket";
+
 export default function RatedPage() {
   const [ratedGames, setRatedGames] = useState([]);
   const [allGames, setAllGames] = useState([]);
@@ -31,12 +40,23 @@ export default function RatedPage() {
   const [isComparing, setIsComparing] = useState(false);
   const [comparisonIndex, setComparisonIndex] = useState(0);
   const [comparisonGames, setComparisonGames] = useState([]);
-  const [isRatingChoiceOpen, setIsRatingChoiceOpen] = useState(false);
+  const [userFeedback, setUserFeedback] = useState(null);
+  const [lowerBound, setLowerBound] = useState(0);
+  const [upperBound, setUpperBound] = useState(0);
+
+  const getSupabaseImageUrl = (path) => {
+    if (!path) return "/placeholder.svg";
+    const baseUrl = `https://${SUPABASE_PROJECT_ID}.supabase.co`;
+    return `${baseUrl}/storage/v1/object/public/${SUPABASE_STORAGE_BUCKET}/${path}`;
+  };
 
   useEffect(() => {
     const fetchRatedGames = async () => {
       try {
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
         if (userError) throw userError;
 
         if (!user) {
@@ -53,30 +73,23 @@ export default function RatedPage() {
 
         if (userGamesError) throw userGamesError;
 
-        if (userGames.length === 0) {
-          console.log("No games found for user");
-          setLoading(false);
-          return;
-        }
-
         const gameIds = userGames.map((item) => item.gameid);
 
         const { data: gamesData, error: gamesError } = await supabase
           .from("games")
-          .select("id, name, genre")
+          .select("id, name, genre, image_url")
           .in("id", gameIds);
 
         if (gamesError) throw gamesError;
 
         const combinedData = userGames.map((userGame) => {
-          const gameDetails = gamesData.find(
-            (game) => game.id === userGame.gameid
-          );
+          const gameDetails = gamesData.find((game) => game.id === userGame.gameid);
           return {
             rank: userGame.rank,
             rating: userGame.rating,
             name: gameDetails?.name || "Unknown",
             genre: gameDetails?.genre || "Unknown",
+            imageUrl: getSupabaseImageUrl(gameDetails?.image_url),
           };
         });
 
@@ -92,7 +105,12 @@ export default function RatedPage() {
       try {
         const { data, error } = await supabase.from("games").select("*");
         if (error) throw error;
-        setAllGames(data);
+        setAllGames(
+          data.map((game) => ({
+            ...game,
+            image_url: getSupabaseImageUrl(game.image_url),
+          }))
+        );
       } catch (error) {
         console.error("Error fetching all games:", error);
       }
@@ -102,123 +120,107 @@ export default function RatedPage() {
     fetchAllGames();
   }, []);
 
-  const handleAddGame = async (game) => {
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      console.error("User not authenticated");
-      return;
-    }
-
-    const { data: existingGame, error: fetchError } = await supabase
-      .from("user_games")
-      .select("id")
-      .eq("userid", user.id)
-      .eq("gameid", game.id)
-      .single();
-
-    if (fetchError && fetchError.code !== "PGRST116") {
-      console.error("Error checking for duplicate game:", fetchError.message);
-      return;
-    }
-
-    if (existingGame) {
-      console.log("This game already exists for the user. Skipping addition.");
-      return;
-    }
-
+  const handleAddGame = (game) => {
     setNewGame(game);
-    setIsAddGameOpen(false);
-    setIsRatingChoiceOpen(true);
+    setUserFeedback(null);
+    setIsComparing(false);
+    setLowerBound(0);
+    setUpperBound(ratedGames.length - 1);
   };
 
-  const handleRatingChoice = (choice) => {
-    if (!newGame) return;
-  
-    let comparisonStart = 0;
-    let comparisonEnd = ratedGames.length;
-  
-    
-    if (choice === "like") {
-      comparisonEnd = Math.ceil(ratedGames.length / 3); 
-    } else if (choice === "fine") {
-      comparisonStart = Math.ceil(ratedGames.length / 3);
-      comparisonEnd = Math.ceil((ratedGames.length * 2) / 3); 
-    } else if (choice === "dislike") {
-      comparisonStart = Math.ceil((ratedGames.length * 2) / 3); 
-    }
-  
- 
-    setComparisonGames(ratedGames.slice(comparisonStart, comparisonEnd));
-    setComparisonIndex(comparisonStart); 
-    setIsComparing(true);
-    setIsRatingChoiceOpen(false);
-  };
-  
-  const handleComparison = (isBetter) => {
-    if (!comparisonGames || comparisonGames.length === 0) return;
-  
- 
-    const globalIndex = comparisonIndex;
-  
-    if (isBetter) {
- 
-      addGameToRankings(newGame, globalIndex);
-      setIsComparing(false);
-    } else if (globalIndex < comparisonGames[comparisonGames.length - 1]?.rank - 1) {
-    
-      setComparisonIndex(globalIndex + 1);
+  const handleInitialFeedback = (feedback) => {
+    setUserFeedback(feedback);
+
+    const thirdLength = Math.floor(ratedGames.length / 3);
+    let startIndex;
+
+    if (feedback === "enjoyed it") {
+      startIndex = Math.floor(thirdLength / 2);
+      setLowerBound(0);
+      setUpperBound(thirdLength - 1);
+    } else if (feedback === "thought it was ok") {
+      startIndex = Math.floor(thirdLength + thirdLength / 2);
+      setLowerBound(thirdLength);
+      setUpperBound(thirdLength * 2 - 1);
     } else {
-    
-      addGameToRankings(newGame, comparisonGames[comparisonGames.length - 1]?.rank);
-      setIsComparing(false);
+      startIndex = Math.floor(thirdLength * 2 + (ratedGames.length - thirdLength * 2) / 2);
+      setLowerBound(thirdLength * 2);
+      setUpperBound(ratedGames.length - 1);
     }
+
+    setComparisonGames(ratedGames);
+    setComparisonIndex(startIndex);
+    setIsComparing(true);
   };
-  
+
+  const handleComparison = (isBetter) => {
+    if (isBetter) {
+      setUpperBound(comparisonIndex - 1);
+    } else {
+      setLowerBound(comparisonIndex + 1);
+    }
+
+    if (lowerBound > upperBound) {
+      const insertPosition = lowerBound;
+      addGameToRankings(newGame, insertPosition);
+      setIsComparing(false);
+      setNewGame(null);
+      return;
+    }
+
+    const newMid = Math.ceil((lowerBound + upperBound) / 2);
+    setComparisonIndex(newMid);
+  };
+
   const addGameToRankings = async (game, position) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+      if (userError || !user) {
         console.error("User not authenticated");
         return;
       }
-  
-      const newRank = position + 1;
+
       const updatedRatedGames = [...ratedGames];
       updatedRatedGames.splice(position, 0, {
-        rank: newRank,
-        rating: calculateRating(newRank, updatedRatedGames.length + 1),
+        rank: position + 1,
+        rating: calculateRating(position + 1, ratedGames.length + 1),
         name: game.name,
         genre: game.genre,
+        imageUrl: game.image_url,
       });
-  
-      
-      for (let i = position + 1; i < updatedRatedGames.length; i++) {
+      for (let i = 0; i < updatedRatedGames.length; i++) {
         updatedRatedGames[i].rank = i + 1;
         updatedRatedGames[i].rating = calculateRating(i + 1, updatedRatedGames.length);
       }
-  
+
       setRatedGames(updatedRatedGames);
-  
-      const { error } = await supabase.from("user_games").upsert(
-        updatedRatedGames.map((g, index) => ({
-          userid: user.id,
-          gameid: allGames.find(ag => ag.name === g.name)?.id,
-          rank: index + 1,
-          rating: g.rating,
-        }))
-      );
-  
-      if (error) throw error;
+
+      const upsertData = updatedRatedGames.map((g, index) => ({
+        userid: user.id,
+        gameid: allGames.find((ag) => ag.name === g.name)?.id,
+        rank: index + 1,
+        rating: g.rating,
+      }));
+
+      const { error: dbError } = await supabase
+        .from("user_games")
+        .upsert(upsertData, { onConflict: ["userid", "gameid"] });
+
+      if (dbError) {
+        console.error("Error updating rankings in the database:", dbError.message);
+      }
     } catch (error) {
-      console.error("Error updating rankings:", error);
+      console.error("Error updating rankings:", error.message);
     }
   };
-  
 
   const calculateRating = (rank, totalGames) => {
     const maxRating = 10;
     const weight = (totalGames - rank + 1) / totalGames;
-    return parseFloat((maxRating * weight).toFixed(2));
+    return Number.parseFloat((maxRating * weight).toFixed(2));
   };
 
   return (
@@ -237,17 +239,22 @@ export default function RatedPage() {
           <DialogContent className="sm:max-w-[425px] bg-[#1a1f29] text-white">
             <DialogHeader>
               <DialogTitle>Add a New Game</DialogTitle>
-              <DialogDescription>
-                Select a game to add to your rankings.
-              </DialogDescription>
+              <DialogDescription>Select a game to add to your rankings.</DialogDescription>
             </DialogHeader>
             <ScrollArea className="h-[300px] rounded-md border p-4">
               {allGames.map((game) => (
                 <Button
                   key={game.id}
                   onClick={() => handleAddGame(game)}
-                  className="w-full justify-start mb-2 bg-transparent hover:bg-purple-900/20"
+                  className="w-full justify-start mb-2 bg-transparent hover:bg-purple-900/20 flex items-center"
                 >
+                  <img
+                    src={game.image_url || "/placeholder.svg"}
+                    alt={`${game.name} logo`}
+                    width={32}
+                    height={32}
+                    className="object-contain mr-2"
+                  />
                   {game.name}
                 </Button>
               ))}
@@ -256,24 +263,30 @@ export default function RatedPage() {
         </Dialog>
       </nav>
 
-      {isRatingChoiceOpen && (
-        <Dialog open={isRatingChoiceOpen} onOpenChange={setIsRatingChoiceOpen}>
+      {newGame && !isComparing && userFeedback === null && (
+        <Dialog open={newGame !== null} onOpenChange={() => setNewGame(null)}>
           <DialogContent className="sm:max-w-[425px] bg-[#1a1f29] text-white">
             <DialogHeader>
-              <DialogTitle>Rate New Game</DialogTitle>
-              <DialogDescription>
-                How did you enjoy {newGame?.name}?
-              </DialogDescription>
+              <DialogTitle>How did you feel about {newGame?.name}?</DialogTitle>
             </DialogHeader>
-            <div className="flex flex-col gap-4">
-              <Button onClick={() => handleRatingChoice("like")} className="bg-green-600 hover:bg-green-700">
-                I liked it!
+            <div className="flex justify-around mt-4">
+              <Button
+                onClick={() => handleInitialFeedback("enjoyed it")}
+                className="bg-green-600 hover:bg-green-700 px-4"
+              >
+                Enjoyed It
               </Button>
-              <Button onClick={() => handleRatingChoice("fine")} className="bg-yellow-600 hover:bg-yellow-700">
-                I thought it was fine.
+              <Button
+                onClick={() => handleInitialFeedback("thought it was ok")}
+                className="bg-yellow-600 hover:bg-yellow-700 px-4"
+              >
+                Thought It Was OK
               </Button>
-              <Button onClick={() => handleRatingChoice("dislike")} className="bg-red-600 hover:bg-red-700">
-                I did not like it.
+              <Button
+                onClick={() => handleInitialFeedback("did not like it")}
+                className="bg-red-600 hover:bg-red-700 px-4"
+              >
+                Did Not Like It
               </Button>
             </div>
           </DialogContent>
@@ -281,19 +294,48 @@ export default function RatedPage() {
       )}
 
       {isComparing && (
-        <Dialog open={isComparing} onOpenChange={setIsComparing}>
+        <Dialog open={isComparing} onOpenChange={() => setIsComparing(false)}>
           <DialogContent className="sm:max-w-[425px] bg-[#1a1f29] text-white">
             <DialogHeader>
-              <DialogTitle>Compare New Game</DialogTitle>
+              <DialogTitle>Compare Game</DialogTitle>
               <DialogDescription>
                 Do you like {newGame?.name} more than {comparisonGames[comparisonIndex]?.name}?
               </DialogDescription>
             </DialogHeader>
+            <div className="flex justify-between items-center mt-4">
+              <div className="text-center">
+                <img
+                  src={newGame?.image_url || "/placeholder.svg"}
+                  alt={`${newGame?.name} logo`}
+                  width={64}
+                  height={64}
+                  className="object-contain mx-auto mb-2"
+                />
+                <p>{newGame?.name}</p>
+              </div>
+              <div className="text-2xl font-bold">VS</div>
+              <div className="text-center">
+                <img
+                  src={comparisonGames[comparisonIndex]?.imageUrl || "/placeholder.svg"}
+                  alt={`${comparisonGames[comparisonIndex]?.name} logo`}
+                  width={64}
+                  height={64}
+                  className="object-contain mx-auto mb-2"
+                />
+                <p>{comparisonGames[comparisonIndex]?.name}</p>
+              </div>
+            </div>
             <div className="flex justify-between mt-4">
-              <Button onClick={() => handleComparison(true)} className="bg-green-600 hover:bg-green-700">
+              <Button
+                onClick={() => handleComparison(true)}
+                className="bg-green-600 hover:bg-green-700"
+              >
                 Yes
               </Button>
-              <Button onClick={() => handleComparison(false)} className="bg-red-600 hover:bg-red-700">
+              <Button
+                onClick={() => handleComparison(false)}
+                className="bg-red-600 hover:bg-red-700"
+              >
                 No
               </Button>
             </div>
@@ -306,18 +348,17 @@ export default function RatedPage() {
           <Card className="border-purple-800 bg-[#1a1f29]">
             <CardHeader>
               <CardTitle className="text-2xl text-white">Ranked Games</CardTitle>
-              <CardDescription className="text-gray-400">
-                Here are your ranked games
-              </CardDescription>
+              <CardDescription className="text-gray-400">Here are your ranked games</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="rounded-md border border-purple-800">
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="text-gray-400">Game</TableHead>
+                      <TableHead className="text-gray-400">Name</TableHead>
                       <TableHead className="text-gray-400">Rank</TableHead>
                       <TableHead className="text-gray-400">Rating</TableHead>
-                      <TableHead className="text-gray-400">Game</TableHead>
                       <TableHead className="text-gray-400">Genre</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -327,13 +368,22 @@ export default function RatedPage() {
                         key={index}
                         className="border-purple-800 hover:bg-purple-900/20"
                       >
+                        <TableCell>
+                          <img
+                            src={game.imageUrl || "/placeholder.svg"}
+                            alt={`${game.name} logo`}
+                            width={48}
+                            height={48}
+                            className="object-contain"
+                          />
+                        </TableCell>
+                        <TableCell className="text-white">{game.name}</TableCell>
                         <TableCell className="font-medium text-white">
                           {game.rank}
                         </TableCell>
                         <TableCell className="text-white">
                           {game.rating.toFixed(2)}
                         </TableCell>
-                        <TableCell className="text-white">{game.name}</TableCell>
                         <TableCell className="text-gray-300">{game.genre}</TableCell>
                       </TableRow>
                     ))}
