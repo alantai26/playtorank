@@ -40,12 +40,11 @@ const PlayToRankLanding: React.FC = () => {
         </nav>
         <div className="flex items-center space-x-4">
           <Button
+            asChild
             variant="outline"
             className="text-purple-400 border-purple-400 hover:bg-purple-400 hover:text-white"
           >
-            <Link to="/login" className="w-full h-full flex items-center justify-center">
-              Login
-            </Link>
+            <Link to="/login">Login</Link>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
