@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Link } from "react-router-dom";
-import { supabase } from '@/supabaseClient'; 
+import { useNavigate, Link } from "react-router-dom";
+import { supabase } from '@/supabaseClient';
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,36 +12,41 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function SignUpForm() { 
+export function SignUpForm() {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
-  const handleSubmit = async (event) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
-  
-    const { error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+    try {
+      // Sign up user with metadata
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            username, // Attach username as metadata
+          },
+        },
+      });
 
-    if (signUpError) {
-      setError(signUpError.message);
-      return;
+      if (signUpError) {
+        throw new Error(signUpError.message);
+      }
+
+      // Clear the form and navigate to login page
+      setError('');
+      setEmail('');
+      setUsername('');
+      setPassword('');
+      navigate('/login');
+    } catch (err: any) {
+      setError(err.message);
     }
-
-    const { error: insertError } = await supabase
-      .from('user/passes')
-      .insert([{ email, username, password }]);
-
-    if (insertError) {
-      setError(insertError.message);
-      return;
-    }
-
-    setError('');
   };
 
   return (
@@ -92,11 +97,9 @@ export function SignUpForm() {
                 />
               </div>
               {error && <p className="text-red-500">{error}</p>}
-              <Link to="/login">
-                <Button type="button" className="w-full bg-purple-600 hover:bg-purple-700">
-                  Create Account
-                </Button>
-              </Link>
+              <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700">
+                Create Account
+              </Button>
             </div>
             <div className="mt-4 text-center text-sm text-gray-400">
               Already have an account?{" "}
