@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { supabase } from '@/supabaseClient'; 
+import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '@/supabaseClient';
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,15 +13,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { GamepadIcon } from 'lucide-react';
 
-
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const navigate = useNavigate(); // Use the `useNavigate` hook for navigation.
 
   const handleLogin = async (event) => {
     event.preventDefault();
-
 
     const { data: loginData, error } = await supabase.auth.signInWithPassword({
       email,
@@ -33,27 +32,29 @@ export default function Login() {
       return;
     }
 
-    const userId = loginData.user.id; 
+    const userId = loginData.user.id;
 
-  
-    const { data: userGames, error: userGamesError } = await supabase
-      .from('user_games')
-      .select('*')
-      .eq('userid', userId);
+    try {
+      const { data: userGames, error: userGamesError } = await supabase
+        .from('user_games')
+        .select('*')
+        .eq('userid', userId);
 
-    if (userGamesError) {
-      console.error('Error fetching user games:', userGamesError);
-      setError('Error determining user status. Please try again.');
-      return;
-    }
+      if (userGamesError) {
+        console.error('Error fetching user games:', userGamesError);
+        setError('Error determining user status. Please try again.');
+        return;
+      }
 
-
-    if (!userGames || userGames.length < 10) {
-
-      window.location.href = '/rating';
-    } else {
- 
-      window.location.href = '/rated';
+      // Navigate based on whether the user has rated at least 10 games.
+      if (!userGames || userGames.length < 10) {
+        navigate('/rating');
+      } else {
+        navigate('/rated');
+      }
+    } catch (fetchError) {
+      console.error('Error during login flow:', fetchError);
+      setError('An unexpected error occurred. Please try again.');
     }
   };
 
