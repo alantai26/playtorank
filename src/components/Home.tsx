@@ -26,7 +26,6 @@ import {
 const PlayToRankLanding: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white">
-     
       <header className="container mx-auto px-4 py-6 flex justify-between items-center">
         <div className="flex items-center space-x-2">
           <GamepadIcon className="h-8 w-8 text-purple-500" />
@@ -40,8 +39,13 @@ const PlayToRankLanding: React.FC = () => {
           </ul>
         </nav>
         <div className="flex items-center space-x-4">
-          <Button variant="outline" className="text-purple-400 border-purple-400 hover:bg-purple-400 hover:text-white" onClick={() => window.location.href = '/login'}>
-            Login
+          <Button
+            variant="outline"
+            className="text-purple-400 border-purple-400 hover:bg-purple-400 hover:text-white"
+          >
+            <Link to="/login" className="w-full h-full flex items-center justify-center">
+              Login
+            </Link>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -153,8 +157,8 @@ const PlayToRankLanding: React.FC = () => {
               className="max-w-xs bg-white text-gray-900"
             />
             <Link to="/signup" className="flex items-center gap-2 bg-yellow-500 text-gray-900 hover:bg-yellow-600 px-2 py-1 rounded-lg">
-            <span className="text-lg font-semibold">Sign Up Now</span>
-          </Link>
+              <span className="text-lg font-semibold">Sign Up Now</span>
+            </Link>
           </form>
         </div>
       </section>
