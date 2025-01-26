@@ -194,9 +194,7 @@ export default function RatedPage() {
         rating: g.rating,
       }))
 
-      const { error: dbError } = await supabase
-        .from("user_games")
-        .upsert(upsertData, { onConflict: "userid,gameid" })
+      const { error: dbError } = await supabase.from("user_games").upsert(upsertData, { onConflict: "userid,gameid" })
 
       if (dbError) {
         console.error("Error updating rankings in the database:", dbError.message)
@@ -223,7 +221,6 @@ export default function RatedPage() {
         return
       }
 
-    
       const gameIdsToRemove = allGames.filter((game) => selectedGames.includes(game.name)).map((game) => game.id)
 
       const { error: deleteError } = await supabase
@@ -233,7 +230,6 @@ export default function RatedPage() {
         .in("gameid", gameIdsToRemove)
 
       if (deleteError) throw deleteError
-
 
       const updatedGames = ratedGames.filter((game) => !selectedGames.includes(game.name))
 
@@ -264,6 +260,10 @@ export default function RatedPage() {
     }
   }
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white">
       <nav className="flex items-center justify-between p-4 lg:px-8">
@@ -271,37 +271,42 @@ export default function RatedPage() {
           <GamepadIcon className="h-8 w-8 text-purple-500" />
           <span className="text-lg font-semibold">Play to Rank</span>
         </Link>
-        <Dialog open={isAddGameOpen} onOpenChange={setIsAddGameOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-purple-600 hover:bg-purple-700">
-              <Plus className="mr-2 h-4 w-4" /> Add Game
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px] bg-[#1a1f29] text-white">
-            <DialogHeader>
-              <DialogTitle>Add a New Game</DialogTitle>
-              <DialogDescription>Select a game to add to your rankings.</DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="h-[300px] rounded-md border p-4">
-              {allGames.map((game) => (
-                <Button
-                  key={game.id}
-                  onClick={() => handleAddGame(game)}
-                  className="w-full justify-start mb-2 bg-transparent hover:bg-purple-900/20 flex items-center"
-                >
-                  <img
-                    src={game.image_url || "/placeholder.svg"}
-                    alt={`${game.name} logo`}
-                    width={32}
-                    height={32}
-                    className="object-contain mr-2"
-                  />
-                  {game.name}
-                </Button>
-              ))}
-            </ScrollArea>
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-4">
+          <Dialog open={isAddGameOpen} onOpenChange={setIsAddGameOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-purple-600 hover:bg-purple-700">
+                <Plus className="mr-2 h-4 w-4" /> Add Game
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px] bg-[#1a1f29] text-white">
+              <DialogHeader>
+                <DialogTitle>Add a New Game</DialogTitle>
+                <DialogDescription>Select a game to add to your rankings.</DialogDescription>
+              </DialogHeader>
+              <ScrollArea className="h-[300px] rounded-md border p-4">
+                {allGames.map((game) => (
+                  <Button
+                    key={game.id}
+                    onClick={() => handleAddGame(game)}
+                    className="w-full justify-start mb-2 bg-transparent hover:bg-purple-900/20 flex items-center"
+                  >
+                    <img
+                      src={game.image_url || "/placeholder.svg"}
+                      alt={`${game.name} logo`}
+                      width={32}
+                      height={32}
+                      className="object-contain mr-2"
+                    />
+                    {game.name}
+                  </Button>
+                ))}
+              </ScrollArea>
+            </DialogContent>
+          </Dialog>
+          <Button onClick={handleLogout} variant="outline" className="border-red-600 text-red-600 hover:bg-red-600/10">
+            Logout
+          </Button>
+        </div>
       </nav>
 
       {newGame && !isComparing && userFeedback === null && (
@@ -386,10 +391,7 @@ export default function RatedPage() {
                 <CardTitle className="text-2xl text-white">Ranked Games</CardTitle>
                 <div className="flex gap-2">
                   {isRemovalMode ? (
-                    <Button
-                      onClick={handleConfirmRemoval}
-                      className="bg-red-600 hover:bg-red-700"
-                    >
+                    <Button onClick={handleConfirmRemoval} className="bg-red-600 hover:bg-red-700">
                       Confirm Remove ({selectedGames.length})
                     </Button>
                   ) : (

@@ -1,29 +1,31 @@
-import React from 'react'
-import { Link } from "react-router-dom";
+import type React from "react"
+import { useState, useEffect } from "react"
+import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/components/ui/carousel"
-import { GamepadIcon, Star, TrendingUp, Users, Search, Menu } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel"
+import { GamepadIcon, Star, TrendingUp, Users, Search, Menu } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { supabase } from "@/supabaseClient"
 
 const PlayToRankLanding: React.FC = () => {
+  const [user, setUser] = useState(null)
+
+  useEffect(() => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null)
+    })
+
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
+  }, [])
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white">
       <header className="container mx-auto px-4 py-6 flex justify-between items-center">
@@ -33,19 +35,41 @@ const PlayToRankLanding: React.FC = () => {
         </div>
         <nav className="hidden md:block">
           <ul className="flex space-x-6">
-            <li><a href="#features" className="hover:text-purple-400 transition-colors">Features</a></li>
-            <li><a href="#how-it-works" className="hover:text-purple-400 transition-colors">How It Works</a></li>
-            <li><a href="#contact" className="hover:text-purple-400 transition-colors">Contact</a></li>
+            <li>
+              <a href="#features" className="hover:text-purple-400 transition-colors">
+                Features
+              </a>
+            </li>
+            <li>
+              <a href="#how-it-works" className="hover:text-purple-400 transition-colors">
+                How It Works
+              </a>
+            </li>
+            <li>
+              <a href="#contact" className="hover:text-purple-400 transition-colors">
+                Contact
+              </a>
+            </li>
           </ul>
         </nav>
         <div className="flex items-center space-x-4">
-          <Button
-            asChild
-            variant="outline"
-            className="text-purple-400 border-purple-400 hover:bg-purple-400 hover:text-white"
-          >
-            <Link to="/login">Login</Link>
-          </Button>
+          {user ? (
+            <Button
+              variant="outline"
+              className="text-purple-400 border-purple-400 hover:bg-purple-400 hover:text-white"
+              onClick={handleLogout}
+            >
+              Logout
+            </Button>
+          ) : (
+            <Button
+              asChild
+              variant="outline"
+              className="text-purple-400 border-purple-400 hover:bg-purple-400 hover:text-white"
+            >
+              <Link to="/login">Login</Link>
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="md:hidden">
@@ -78,7 +102,11 @@ const PlayToRankLanding: React.FC = () => {
           <Button size="lg" className="bg-purple-600 hover:bg-purple-700">
             Get Started
           </Button>
-          <Button size="lg" variant="outline" className="text-purple-400 border-purple-400 hover:bg-purple-400 hover:text-white">
+          <Button
+            size="lg"
+            variant="outline"
+            className="text-purple-400 border-purple-400 hover:bg-purple-400 hover:text-white"
+          >
             Learn More
           </Button>
         </div>
@@ -88,22 +116,22 @@ const PlayToRankLanding: React.FC = () => {
         <div className="container mx-auto px-4">
           <h2 className="text-3xl font-bold mb-12 text-center">Why Choose Play to Rank?</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <FeatureCard 
+            <FeatureCard
               icon={<Star className="h-12 w-12 text-yellow-400" />}
               title="Rate Games"
               description="Share your opinions and rate games based on various criteria."
             />
-            <FeatureCard 
+            <FeatureCard
               icon={<TrendingUp className="h-12 w-12 text-green-400" />}
               title="Track Trends"
               description="Stay updated with the latest gaming trends and popular titles."
             />
-            <FeatureCard 
+            <FeatureCard
               icon={<Users className="h-12 w-12 text-blue-400" />}
               title="Community"
               description="Connect with other gamers and share your gaming experiences."
             />
-            <FeatureCard 
+            <FeatureCard
               icon={<Search className="h-12 w-12 text-purple-400" />}
               title="Discover"
               description="Find new games tailored to your preferences and play style."
@@ -150,12 +178,11 @@ const PlayToRankLanding: React.FC = () => {
             Join our community of gamers and start sharing your opinions today!
           </p>
           <form className="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4">
-            <Input 
-              type="email" 
-              placeholder="Enter your email" 
-              className="max-w-xs bg-white text-gray-900"
-            />
-            <Link to="/signup" className="flex items-center gap-2 bg-yellow-500 text-gray-900 hover:bg-yellow-600 px-2 py-1 rounded-lg">
+            <Input type="email" placeholder="Enter your email" className="max-w-xs bg-white text-gray-900" />
+            <Link
+              to="/signup"
+              className="flex items-center gap-2 bg-yellow-500 text-gray-900 hover:bg-yellow-600 px-2 py-1 rounded-lg"
+            >
               <span className="text-lg font-semibold">Sign Up Now</span>
             </Link>
           </form>
@@ -214,3 +241,4 @@ const StepCard: React.FC<StepCardProps> = ({ number, title, description }) => {
 }
 
 export default PlayToRankLanding
+

@@ -4,18 +4,11 @@ import { supabase } from "@/supabaseClient"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { GamepadIcon, Plus } from "lucide-react"
+import { GamepadIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
-export default function RatingPage() {
+export function RatingPage() {
   const [games, setGames] = useState([])
   const [selectedGames, setSelectedGames] = useState<number[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -92,20 +85,12 @@ export default function RatingPage() {
         return
       }
 
-      console.log("User games data inserted successfully:", userGamesData)
       setSuccessMessage("Games successfully submitted!")
       navigate("/rated")
     } catch (err) {
       console.error("Unexpected error:", err)
       setError("An unexpected error occurred. Please try again.")
     }
-  }
-
-  const handleAddGame = (game) => {
-    setNewGame(game)
-    setIsAddGameOpen(false)
-    setIsComparing(true)
-    setComparisonIndex(0)
   }
 
   const handleComparisonChoice = (choice: string) => {

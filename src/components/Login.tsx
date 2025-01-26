@@ -46,11 +46,11 @@ export default function Login() {
         return;
       }
 
-      // Navigate based on whether the user has rated at least 10 games.
+  
       if (!userGames || userGames.length < 10) {
         navigate('/rating');
       } else {
-        navigate('/rated');
+        navigate('/');
       }
     } catch (fetchError) {
       console.error('Error during login flow:', fetchError);
