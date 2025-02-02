@@ -166,43 +166,64 @@ export default function RatedPage() {
       const {
         data: { user },
         error: userError,
-      } = await supabase.auth.getUser()
+      } = await supabase.auth.getUser();
       if (userError || !user) {
-        console.error("User not authenticated")
-        return
+        console.error("User not authenticated");
+        return;
       }
-
-      const updatedRatedGames = [...ratedGames]
+  
+      const { data: duplicateCheck, error: duplicateError } = await supabase
+        .from("user_games")
+        .select("*")
+        .eq("userid", user.id)
+        .eq("gameid", allGames.find((ag) => ag.name === game.name)?.id)
+        .single();
+  
+      if (duplicateError && duplicateError.code !== "PGRST116") {
+        console.error("Error checking for duplicates:", duplicateError.message);
+        return;
+      }
+  
+      if (duplicateCheck) {
+        alert(`You cannot add "${game.name}" because it is already in your rankings.`);
+        return;
+      }
+  
+      const updatedRatedGames = [...ratedGames];
       updatedRatedGames.splice(position, 0, {
         rank: position + 1,
         rating: calculateRating(position + 1, ratedGames.length + 1),
         name: game.name,
         genre: game.genre,
         imageUrl: game.image_url,
-      })
+      });
+  
       for (let i = 0; i < updatedRatedGames.length; i++) {
-        updatedRatedGames[i].rank = i + 1
-        updatedRatedGames[i].rating = calculateRating(i + 1, updatedRatedGames.length)
+        updatedRatedGames[i].rank = i + 1;
+        updatedRatedGames[i].rating = calculateRating(i + 1, updatedRatedGames.length);
       }
-
-      setRatedGames(updatedRatedGames)
-
+  
+      setRatedGames(updatedRatedGames);
+  
       const upsertData = updatedRatedGames.map((g, index) => ({
         userid: user.id,
         gameid: allGames.find((ag) => ag.name === g.name)?.id,
         rank: index + 1,
         rating: g.rating,
-      }))
-
-      const { error: dbError } = await supabase.from("user_games").upsert(upsertData, { onConflict: "userid,gameid" })
-
+      }));
+  
+      const { error: dbError } = await supabase
+        .from("user_games")
+        .upsert(upsertData, { onConflict: "userid,gameid" });
+  
       if (dbError) {
-        console.error("Error updating rankings in the database:", dbError.message)
+        console.error("Error updating rankings in the database:", dbError.message);
       }
     } catch (error) {
-      console.error("Error updating rankings:", error.message)
+      console.error("Error updating rankings:", error.message);
     }
-  }
+  };
+  
 
   const calculateRating = (rank, totalGames) => {
     const maxRating = 10

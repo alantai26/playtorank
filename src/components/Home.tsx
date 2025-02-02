@@ -5,16 +5,22 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel"
-import { GamepadIcon, Star, TrendingUp, Users, Search, Menu } from "lucide-react"
+import { GamepadIcon, Star, TrendingUp, Users, Search, Menu, Trophy } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { supabase } from "@/supabaseClient"
+import { supabase } from '@/supabaseClient';
 
 const PlayToRankLanding: React.FC = () => {
   const [user, setUser] = useState(null)
+  const [username, setUsername] = useState("")
+  const [hasEnoughGames, setHasEnoughGames] = useState(false)
+  const [gamesCount, setGamesCount] = useState(0)
 
   useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null)
+      if (session?.user) {
+        setUsername(session.user.user_metadata.username || "Gamer")
+      }
     })
 
     return () => {
@@ -22,75 +28,25 @@ const PlayToRankLanding: React.FC = () => {
     }
   }, [])
 
+  useEffect(() => {
+    const checkGames = async () => {
+      if (user) {
+        const { data: userGames } = await supabase.from("user_games").select("*").eq("userid", user.id)
+        const count = userGames?.length || 0
+        setGamesCount(count)
+        setHasEnoughGames(count >= 10)
+      }
+    }
+
+    checkGames()
+  }, [user])
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white">
-      <header className="container mx-auto px-4 py-6 flex justify-between items-center">
-        <div className="flex items-center space-x-2">
-          <GamepadIcon className="h-8 w-8 text-purple-500" />
-          <span className="text-2xl font-bold">Play to Rank</span>
-        </div>
-        <nav className="hidden md:block">
-          <ul className="flex space-x-6">
-            <li>
-              <a href="#features" className="hover:text-purple-400 transition-colors">
-                Features
-              </a>
-            </li>
-            <li>
-              <a href="#how-it-works" className="hover:text-purple-400 transition-colors">
-                How It Works
-              </a>
-            </li>
-            <li>
-              <a href="#contact" className="hover:text-purple-400 transition-colors">
-                Contact
-              </a>
-            </li>
-          </ul>
-        </nav>
-        <div className="flex items-center space-x-4">
-          {user ? (
-            <Button
-              variant="outline"
-              className="text-purple-400 border-purple-400 hover:bg-purple-400 hover:text-white"
-              onClick={handleLogout}
-            >
-              Logout
-            </Button>
-          ) : (
-            <Button
-              asChild
-              variant="outline"
-              className="text-purple-400 border-purple-400 hover:bg-purple-400 hover:text-white"
-            >
-              <Link to="/login">Login</Link>
-            </Button>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>
-                <a href="#features">Features</a>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <a href="#how-it-works">How It Works</a>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <a href="#contact">Contact</a>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </header>
-
+  const LoggedOutView = () => (
+    <>
       <section className="container mx-auto px-4 py-20 text-center">
         <h1 className="text-5xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">
           Rank Your Favorite Games
@@ -99,8 +55,8 @@ const PlayToRankLanding: React.FC = () => {
           Discover, rate, and compare video games. Join our community of gamers and find your next favorite title!
         </p>
         <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
-          <Button size="lg" className="bg-purple-600 hover:bg-purple-700">
-            Get Started
+          <Button size="lg" className="bg-purple-600 hover:bg-purple-700" asChild>
+            <Link to="/signup">Get Started</Link>
           </Button>
           <Button
             size="lg"
@@ -139,6 +95,122 @@ const PlayToRankLanding: React.FC = () => {
           </div>
         </div>
       </section>
+    </>
+  )
+
+  const LoggedInView = () => (
+    <section className="container mx-auto px-4 py-12">
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold mb-4">
+            Welcome back, <span className="text-purple-400">{username}</span>!
+          </h1>
+          <p className="text-xl text-gray-300">
+            You've rated {gamesCount} {gamesCount === 1 ? "game" : "games"} so far.
+          </p>
+        </div>
+
+        <div className="grid gap-8 md:grid-cols-2">
+          <Card className="bg-gradient-to-br from-purple-600 to-pink-600 border-none text-white">
+            <CardHeader>
+              <CardTitle className="text-2xl">Ready to Rate More Games?</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-lg">
+                {hasEnoughGames
+                  ? "Keep growing your collection and refining your rankings!"
+                  : `Rate ${10 - gamesCount} more games to unlock your personalized rankings!`}
+              </p>
+              <Button
+                size="lg"
+                className="w-full bg-white text-purple-600 hover:bg-gray-100 hover:text-purple-700"
+                asChild
+              >
+                <Link to={hasEnoughGames ? "/ranked-games" : "/rating"}>
+                  <Trophy className="mr-2 h-5 w-5" />
+                  {hasEnoughGames ? "View Your Rankings" : "Start Rating"}
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gray-800 border-purple-500">
+            <CardHeader>
+              <CardTitle className="text-xl text-purple-400">Quick Stats</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center p-4 bg-gray-700 rounded-lg">
+                  <p className="text-3xl font-bold text-purple-400">{gamesCount}</p>
+                  <p className="text-sm text-gray-300">Games Rated</p>
+                </div>
+                <div className="text-center p-4 bg-gray-700 rounded-lg">
+                  <p className="text-3xl font-bold text-purple-400">
+                    {hasEnoughGames ? "Unlocked" : `${Math.min(Math.round((gamesCount / 10) * 100), 100)}%`}
+                  </p>
+                  <p className="text-sm text-gray-300">Progress</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </section>
+  )
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white">
+      <header className="container mx-auto px-4 py-6 flex items-center">
+        <div className="flex items-center space-x-2">
+          <GamepadIcon className="h-8 w-8 text-purple-500" />
+          <span className="text-2xl font-bold">Play to Rank</span>
+        </div>
+        <div className="flex-1" />
+        <nav className="hidden md:flex items-center space-x-4">
+          {user ? (
+            <Button
+              onClick={handleLogout}
+              variant="outline"
+              className="border-red-600 text-red-600 hover:bg-red-600/10"
+            >
+              Logout
+            </Button>
+          ) : (
+            <Button
+              asChild
+              variant="outline"
+              className="text-purple-400 border-purple-400 hover:bg-purple-400 hover:text-white"
+            >
+              <Link to="/login">Login</Link>
+            </Button>
+          )}
+        </nav>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="md:hidden">
+              <Menu className="h-5 w-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {user && (
+              <DropdownMenuItem>
+                <Link to={hasEnoughGames ? "/ranked-games" : "/rating"}>
+                  {hasEnoughGames ? "View Rankings" : "Start Rating"}
+                </Link>
+              </DropdownMenuItem>
+            )}
+            {user ? (
+              <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem>
+                <Link to="/login">Login</Link>
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </header>
+
+      <main>{user ? <LoggedInView /> : <LoggedOutView />}</main>
 
       <section id="how-it-works" className="container mx-auto px-4 py-20">
         <h2 className="text-3xl font-bold mb-12 text-center">How It Works</h2>
@@ -181,7 +253,7 @@ const PlayToRankLanding: React.FC = () => {
             <Input type="email" placeholder="Enter your email" className="max-w-xs bg-white text-gray-900" />
             <Link
               to="/signup"
-              className="flex items-center gap-2 bg-yellow-500 text-gray-900 hover:bg-yellow-600 px-2 py-1 rounded-lg"
+              className="flex items-center gap-2 bg-yellow-500 text-gray-900 hover:bg-yellow-600 px-6 py-2 rounded-lg"
             >
               <span className="text-lg font-semibold">Sign Up Now</span>
             </Link>
@@ -191,7 +263,7 @@ const PlayToRankLanding: React.FC = () => {
 
       <footer className="bg-gray-800 py-8">
         <div className="container mx-auto px-4 text-center text-gray-400">
-          <p>&copy; Placeholder</p>
+          <p>&copy; {new Date().getFullYear()} Play to Rank. All rights reserved.</p>
         </div>
       </footer>
     </div>

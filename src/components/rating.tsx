@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 
 export function RatingPage() {
   const [games, setGames] = useState([])
+  const [user, setUser] = useState(null)
   const [selectedGames, setSelectedGames] = useState<number[]>([])
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -17,9 +18,24 @@ export function RatingPage() {
   const [newGame, setNewGame] = useState(null)
   const [comparisonIndex, setComparisonIndex] = useState(0)
   const [isComparing, setIsComparing] = useState(false)
-
+  const [gamesCount, setGamesCount] = useState(0)
+  const [username, setUsername] = useState("")
   const navigate = useNavigate()
 
+  
+
+  useEffect(() => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setUser(session?.user ?? null)
+      if (session?.user) {
+        setUsername(session.user.user_metadata.username || "Gamer")
+      }
+    })
+
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
+  }, [])
   useEffect(() => {
     const fetchGames = async () => {
       const { data, error } = await supabase.from("games").select("*")
@@ -33,6 +49,18 @@ export function RatingPage() {
 
     fetchGames()
   }, [])
+
+  useEffect(() => {
+    const checkGames = async () => {
+      if (user) {
+        const { data: userGames } = await supabase.from("user_games").select("*").eq("userid", user.id)
+        const count = userGames.length || 0
+        setGamesCount(count)
+      }
+    }
+
+    checkGames()
+  }, [user])
 
   const handleGameToggle = (gameId: number) => {
     setSelectedGames((prev) => {
@@ -86,7 +114,7 @@ export function RatingPage() {
       }
 
       setSuccessMessage("Games successfully submitted!")
-      navigate("/rated")
+      navigate("/ranked-games")
     } catch (err) {
       console.error("Unexpected error:", err)
       setError("An unexpected error occurred. Please try again.")
@@ -129,14 +157,14 @@ export function RatingPage() {
             <CardHeader>
               <CardTitle className="text-2xl text-white">Select Your Games</CardTitle>
               <CardDescription className="text-gray-400">
-                Please select at least 10 games you've played or want to rate
+                Select, in order, the games you want to rank:
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col gap-6">
                 {selectedGames.length < 10 && (
                   <Alert className="border-purple-800 bg-purple-900/20 text-white flex items-start">
-                    <AlertDescription>Please select {10 - selectedGames.length} more games:</AlertDescription>
+                    <AlertDescription>Please select {10 - selectedGames.length - gamesCount} more games:</AlertDescription>
                   </Alert>
                 )}
                 {error && (
@@ -172,7 +200,7 @@ export function RatingPage() {
                     ))}
                   </div>
                 </ScrollArea>
-                {selectedGames.length >= 10 && (
+                {selectedGames.length + gamesCount >= 10 && (
                   <Button onClick={handleSubmit} className="w-full bg-purple-600 hover:bg-purple-700">
                     Submit
                   </Button>
