@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { GamepadIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { SearchInput } from "@/components/ui/search-input.tsx"
 
 export function RatingPage() {
   const [games, setGames] = useState([])
@@ -20,9 +20,8 @@ export function RatingPage() {
   const [isComparing, setIsComparing] = useState(false)
   const [gamesCount, setGamesCount] = useState(0)
   const [username, setUsername] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
   const navigate = useNavigate()
-
-  
 
   useEffect(() => {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -36,6 +35,7 @@ export function RatingPage() {
       authListener.subscription.unsubscribe()
     }
   }, [])
+
   useEffect(() => {
     const fetchGames = async () => {
       const { data, error } = await supabase.from("games").select("*")
@@ -92,56 +92,72 @@ export function RatingPage() {
 
       const userId = user.id
 
-      const totalGames = selectedGames.length
+      const { data: existingUserGames, error: fetchError } = await supabase
+        .from("user_games")
+        .select("*")
+        .eq("userid", userId)
+        .order("rank", { ascending: true })
 
-      const userGamesData = selectedGames.map((gameId, index) => {
-        const rank = index + 1
-        const rating = calculateRating(rank, totalGames)
-        return {
-          userid: userId,
-          gameid: gameId,
-          rank,
-          rating,
-        }
-      })
-
-      const { error: insertError } = await supabase.from("user_games").insert(userGamesData)
-
-      if (insertError) {
-        console.error("Error inserting data:", insertError)
-        setError(insertError.message)
+      if (fetchError) {
+        console.error("Error fetching user games:", fetchError)
+        setError(fetchError.message)
         return
       }
 
-      setSuccessMessage("Games successfully submitted!")
+      const existingGameIds = existingUserGames?.map((game) => game.gameid) || []
+      const newGames = selectedGames.filter((gameId) => !existingGameIds.includes(gameId))
+
+      const duplicateGames = selectedGames.filter((gameId) => existingGameIds.includes(gameId))
+      if (duplicateGames.length > 0) {
+        const duplicateGameNames = duplicateGames
+          .map((gameId) => games.find((game) => game.id === gameId)?.name)
+          .filter(Boolean)
+        setError(
+          `Error: You have already ranked the following game(s): ${duplicateGameNames.join(", ")}. Please remove any duplicates and try again.`,
+        )
+        return
+      }
+
+      const totalGames = existingGameIds.length + newGames.length
+
+      const userGamesData = [
+        ...existingUserGames.map((game) => ({
+          userid: userId,
+          gameid: game.gameid,
+          rank: game.rank,
+          rating: calculateRating(game.rank, totalGames),
+        })),
+        ...newGames.map((gameId, index) => ({
+          userid: userId,
+          gameid: gameId,
+          rank: existingGameIds.length + index + 1,
+          rating: calculateRating(existingGameIds.length + index + 1, totalGames),
+        })),
+      ]
+
+      const { error: upsertError } = await supabase
+        .from("user_games")
+        .upsert(userGamesData, { onConflict: ["userid", "gameid"] })
+
+      if (upsertError) {
+        console.error("⚠️ Upsert error:", upsertError)
+        setError("An error occurred while updating your game rankings. Please try again.")
+        return
+      }
+
+      setSuccessMessage("✅ Games successfully submitted!")
       navigate("/ranked-games")
     } catch (err) {
-      console.error("Unexpected error:", err)
+      console.error("❌ Unexpected error:", err)
       setError("An unexpected error occurred. Please try again.")
     }
   }
 
-  const handleComparisonChoice = (choice: string) => {
-    if (choice === "like") {
-      compareWithRankedGames(newGame, 0, Math.ceil(selectedGames.length / 3))
-    } else if (choice === "fine") {
-      setSelectedGames((prev) => [...prev, newGame.id])
-      setIsComparing(false)
-    } else {
-      setIsComparing(false)
-    }
-  }
-
-  const compareWithRankedGames = (game, startIndex, endIndex) => {
-    if (startIndex >= endIndex) {
-      setSelectedGames((prev) => [...prev, game.id])
-      setIsComparing(false)
-      return
-    }
-
-    const currentComparison = games.find((g) => g.id === selectedGames[startIndex])
-    setComparisonIndex(startIndex)
-  }
+  const filteredGames = games.filter(
+    (game) =>
+      game.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      game.genre.toLowerCase().includes(searchQuery.toLowerCase()),
+  )
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white">
@@ -156,15 +172,15 @@ export function RatingPage() {
           <Card className="border-purple-800 bg-[#1a1f29]">
             <CardHeader>
               <CardTitle className="text-2xl text-white">Select Your Games</CardTitle>
-              <CardDescription className="text-gray-400">
-                Select, in order, the games you want to rank:
-              </CardDescription>
+              <CardDescription className="text-gray-400">Select, in order, the games you want to rank:</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col gap-6">
-                {selectedGames.length < 10 && (
+                {selectedGames.length < 6 && (
                   <Alert className="border-purple-800 bg-purple-900/20 text-white flex items-start">
-                    <AlertDescription>Please select {10 - selectedGames.length - gamesCount} more games:</AlertDescription>
+                    <AlertDescription>
+                      Please select {6 - selectedGames.length - gamesCount} more games:
+                    </AlertDescription>
                   </Alert>
                 )}
                 {error && (
@@ -177,9 +193,10 @@ export function RatingPage() {
                     <AlertDescription>{successMessage}</AlertDescription>
                   </Alert>
                 )}
+                <SearchInput value={searchQuery} onChange={setSearchQuery} />
                 <ScrollArea className="h-[400px] rounded-md border border-purple-800 p-4 text-white">
                   <div className="grid gap-4 pr-4">
-                    {games.map((game) => (
+                    {filteredGames.map((game) => (
                       <div
                         key={game.id}
                         className="flex items-center space-x-4 rounded-lg border border-purple-800/40 bg-[#0f1218] p-4"
@@ -200,7 +217,7 @@ export function RatingPage() {
                     ))}
                   </div>
                 </ScrollArea>
-                {selectedGames.length + gamesCount >= 10 && (
+                {selectedGames.length + gamesCount >= 6 && (
                   <Button onClick={handleSubmit} className="w-full bg-purple-600 hover:bg-purple-700">
                     Submit
                   </Button>
@@ -210,32 +227,6 @@ export function RatingPage() {
           </Card>
         </div>
       </main>
-      {isComparing && newGame && (
-        <Dialog open={isComparing} onOpenChange={setIsComparing}>
-          <DialogContent className="sm:max-w-[425px] bg-[#1a1f29] text-white">
-            <DialogHeader>
-              <DialogTitle>Rate New Game</DialogTitle>
-              <DialogDescription>How did you enjoy {newGame.name}?</DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-4">
-              <Button onClick={() => handleComparisonChoice("like")} className="bg-green-600 hover:bg-green-700">
-                I liked it!
-              </Button>
-              <Button onClick={() => handleComparisonChoice("fine")} className="bg-yellow-600 hover:bg-yellow-700">
-                I thought it was fine.
-              </Button>
-              <Button onClick={() => handleComparisonChoice("dislike")} className="bg-red-600 hover:bg-red-700">
-                I did not like it.
-              </Button>
-            </div>
-            {comparisonIndex < Math.ceil(selectedGames.length / 3) && (
-              <p className="text-center mt-4">
-                Do you like {newGame.name} more than {games.find((g) => g.id === selectedGames[comparisonIndex])?.name}?
-              </p>
-            )}
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
   )
 }

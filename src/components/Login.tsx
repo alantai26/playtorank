@@ -17,7 +17,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const navigate = useNavigate(); // Use the `useNavigate` hook for navigation.
+  const navigate = useNavigate();
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -47,7 +47,7 @@ export default function Login() {
       }
 
   
-      if (!userGames || userGames.length < 10) {
+      if (!userGames || userGames.length < 6) {
         navigate('/rating');
       } else {
         navigate('/');

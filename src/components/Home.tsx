@@ -34,7 +34,7 @@ const PlayToRankLanding: React.FC = () => {
         const { data: userGames } = await supabase.from("user_games").select("*").eq("userid", user.id)
         const count = userGames?.length || 0
         setGamesCount(count)
-        setHasEnoughGames(count >= 10)
+        setHasEnoughGames(count >= 6)
       }
     }
 
@@ -119,7 +119,7 @@ const PlayToRankLanding: React.FC = () => {
               <p className="text-lg">
                 {hasEnoughGames
                   ? "Keep growing your collection and refining your rankings!"
-                  : `Rate ${10 - gamesCount} more games to unlock your personalized rankings!`}
+                  : `Rate ${6 - gamesCount} more games to unlock your personalized rankings!`}
               </p>
               <Button
                 size="lg"
@@ -146,7 +146,7 @@ const PlayToRankLanding: React.FC = () => {
                 </div>
                 <div className="text-center p-4 bg-gray-700 rounded-lg">
                   <p className="text-3xl font-bold text-purple-400">
-                    {hasEnoughGames ? "Unlocked" : `${Math.min(Math.round((gamesCount / 10) * 100), 100)}%`}
+                    {hasEnoughGames ? "Unlocked" : `${Math.min(Math.round((gamesCount / 6) * 100), 100)}%`}
                   </p>
                   <p className="text-sm text-gray-300">Progress</p>
                 </div>

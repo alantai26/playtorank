@@ -14,6 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { SearchInput } from "@/components/ui/search-input"
 
 const SUPABASE_PROJECT_ID = "bcqrezetbqornuuadcer"
 const SUPABASE_STORAGE_BUCKET = "bukcket"
@@ -32,6 +33,8 @@ export default function RatedPage() {
   const [upperBound, setUpperBound] = useState(0)
   const [isRemovalMode, setIsRemovalMode] = useState(false)
   const [selectedGames, setSelectedGames] = useState([])
+  const [searchQuery, setSearchQuery] = useState("")
+  const [addGameSearchQuery, setAddGameSearchQuery] = useState("")
 
   const getSupabaseImageUrl = (path) => {
     if (!path) return "/placeholder.svg"
@@ -107,7 +110,7 @@ export default function RatedPage() {
 
     fetchRatedGames()
     fetchAllGames()
-  }, [])
+  }, [getSupabaseImageUrl])
 
   const handleAddGame = (game) => {
     setNewGame(game)
@@ -143,21 +146,20 @@ export default function RatedPage() {
   }
 
   const handleComparison = (isBetter) => {
-    if (isBetter) {
-      setUpperBound(comparisonIndex - 1)
-    } else {
-      setLowerBound(comparisonIndex + 1)
-    }
+    const newLowerBound = isBetter ? lowerBound : comparisonIndex + 1
+    const newUpperBound = isBetter ? comparisonIndex - 1 : upperBound
 
-    if (lowerBound > upperBound) {
-      const insertPosition = lowerBound
+    if (newLowerBound > newUpperBound) {
+      const insertPosition = newLowerBound
       addGameToRankings(newGame, insertPosition)
       setIsComparing(false)
       setNewGame(null)
       return
     }
 
-    const newMid = Math.ceil((lowerBound + upperBound) / 2)
+    const newMid = Math.ceil((newLowerBound + newUpperBound) / 2)
+    setLowerBound(newLowerBound)
+    setUpperBound(newUpperBound)
     setComparisonIndex(newMid)
   }
 
@@ -166,64 +168,105 @@ export default function RatedPage() {
       const {
         data: { user },
         error: userError,
-      } = await supabase.auth.getUser();
+      } = await supabase.auth.getUser()
       if (userError || !user) {
-        console.error("User not authenticated");
-        return;
+        console.error("User not authenticated")
+        return
       }
-  
-      const { data: duplicateCheck, error: duplicateError } = await supabase
+
+      const gameId = allGames.find((ag) => ag.name === game.name)?.id
+      if (!gameId) {
+        console.error("Game ID not found")
+        return
+      }
+
+      const { data: existingGame, error: checkError } = await supabase
         .from("user_games")
         .select("*")
         .eq("userid", user.id)
-        .eq("gameid", allGames.find((ag) => ag.name === game.name)?.id)
-        .single();
-  
-      if (duplicateError && duplicateError.code !== "PGRST116") {
-        console.error("Error checking for duplicates:", duplicateError.message);
-        return;
+        .eq("gameid", gameId)
+        .single()
+
+      if (checkError && checkError.code !== "PGRST116") {
+        console.error("Error checking existing game:", checkError)
+        return
       }
-  
-      if (duplicateCheck) {
-        alert(`You cannot add "${game.name}" because it is already in your rankings.`);
-        return;
+
+      if (existingGame) {
+        alert(`"${game.name}" is already in your rankings.`)
+        setNewGame(null)
+        setIsAddGameOpen(false)
+        return
       }
-  
-      const updatedRatedGames = [...ratedGames];
-      updatedRatedGames.splice(position, 0, {
-        rank: position + 1,
-        rating: calculateRating(position + 1, ratedGames.length + 1),
-        name: game.name,
-        genre: game.genre,
-        imageUrl: game.image_url,
-      });
-  
-      for (let i = 0; i < updatedRatedGames.length; i++) {
-        updatedRatedGames[i].rank = i + 1;
-        updatedRatedGames[i].rating = calculateRating(i + 1, updatedRatedGames.length);
-      }
-  
-      setRatedGames(updatedRatedGames);
-  
-      const upsertData = updatedRatedGames.map((g, index) => ({
-        userid: user.id,
-        gameid: allGames.find((ag) => ag.name === g.name)?.id,
-        rank: index + 1,
-        rating: g.rating,
-      }));
-  
-      const { error: dbError } = await supabase
+
+      const { data: currentRankings, error: rankingsError } = await supabase
         .from("user_games")
-        .upsert(upsertData, { onConflict: "userid,gameid" });
-  
-      if (dbError) {
-        console.error("Error updating rankings in the database:", dbError.message);
+        .select("*")
+        .eq("userid", user.id)
+        .order("rank", { ascending: true })
+
+      if (rankingsError) {
+        console.error("Error fetching current rankings:", rankingsError)
+        return
       }
+
+      const newRankings = currentRankings.map((r, index) => {
+        if (index >= position) {
+          return {
+            ...r,
+            rank: r.rank + 1,
+            rating: calculateRating(r.rank + 1, currentRankings.length + 1),
+          }
+        }
+        return r
+      })
+
+      const newGameRanking = {
+        userid: user.id,
+        gameid: gameId,
+        rank: position + 1,
+        rating: calculateRating(position + 1, currentRankings.length + 1),
+      }
+
+      if (newRankings.length > 0) {
+        const { error: updateError } = await supabase.from("user_games").upsert(newRankings)
+
+        if (updateError) {
+          console.error("Error updating existing rankings:", updateError)
+          return
+        }
+      }
+
+      const { error: insertError } = await supabase.from("user_games").insert([newGameRanking])
+
+      if (insertError) {
+        console.error("Error inserting new ranking:", insertError)
+        return
+      }
+
+      const updatedGames = [
+        ...ratedGames.slice(0, position),
+        {
+          rank: position + 1,
+          rating: calculateRating(position + 1, ratedGames.length + 1),
+          name: game.name,
+          genre: game.genre,
+          imageUrl: game.image_url,
+        },
+        ...ratedGames.slice(position).map((g, i) => ({
+          ...g,
+          rank: position + i + 2,
+          rating: calculateRating(position + i + 2, ratedGames.length + 1),
+        })),
+      ]
+
+      setRatedGames(updatedGames)
+      setNewGame(null)
+      setIsAddGameOpen(false)
     } catch (error) {
-      console.error("Error updating rankings:", error.message);
+      console.error("Error updating rankings:", error)
     }
-  };
-  
+  }
 
   const calculateRating = (rank, totalGames) => {
     const maxRating = 10
@@ -285,6 +328,18 @@ export default function RatedPage() {
     await supabase.auth.signOut()
   }
 
+  const filteredRatedGames = ratedGames.filter(
+    (game) =>
+      game.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      game.genre.toLowerCase().includes(searchQuery.toLowerCase()),
+  )
+
+  const filteredAddGames = allGames.filter(
+    (game) =>
+      game.name.toLowerCase().includes(addGameSearchQuery.toLowerCase()) ||
+      game.genre.toLowerCase().includes(addGameSearchQuery.toLowerCase()),
+  )
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white">
       <nav className="flex items-center justify-between p-4 lg:px-8">
@@ -299,29 +354,39 @@ export default function RatedPage() {
                 <Plus className="mr-2 h-4 w-4" /> Add Game
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] bg-[#1a1f29] text-white">
-              <DialogHeader>
+            <DialogContent className="sm:max-w-[1000px] bg-[#1a1f29] text-white mx-auto my-8">
+              <DialogHeader className="pb-6">
                 <DialogTitle>Add a New Game</DialogTitle>
                 <DialogDescription>Select a game to add to your rankings.</DialogDescription>
               </DialogHeader>
-              <ScrollArea className="h-[300px] rounded-md border p-4">
-                {allGames.map((game) => (
-                  <Button
-                    key={game.id}
-                    onClick={() => handleAddGame(game)}
-                    className="w-full justify-start mb-2 bg-transparent hover:bg-purple-900/20 flex items-center"
-                  >
-                    <img
-                      src={game.image_url || "/placeholder.svg"}
-                      alt={`${game.name} logo`}
-                      width={32}
-                      height={32}
-                      className="object-contain mr-2"
-                    />
-                    {game.name}
-                  </Button>
-                ))}
-              </ScrollArea>
+              <div className="flex flex-col gap-4">
+                <div className="py-4">
+                  <SearchInput
+                    value={addGameSearchQuery}
+                    onChange={setAddGameSearchQuery}
+                    placeholder="Search games to add..."
+                  />
+                </div>
+                <ScrollArea className="h-[600px] rounded-md border p-6">
+                  {filteredAddGames.map((game) => (
+                    <Button
+                      key={game.id}
+                      onClick={() => handleAddGame(game)}
+                      className="w-full justify-start mb-4 bg-transparent hover:bg-purple-900/20 flex items-center p-4 rounded-lg"
+                    >
+                      <img
+                        src={game.image_url || "/placeholder.svg"}
+                        alt={`${game.name} logo`}
+                        width={50}
+                        height={50}
+                        loading = "lazy"
+                        className="object-contain mr-2"
+                      />
+                      {game.name}
+                    </Button>
+                  ))}
+                </ScrollArea>
+              </div>
             </DialogContent>
           </Dialog>
           <Button onClick={handleLogout} variant="outline" className="border-red-600 text-red-600 hover:bg-red-600/10">
@@ -332,28 +397,28 @@ export default function RatedPage() {
 
       {newGame && !isComparing && userFeedback === null && (
         <Dialog open={newGame !== null} onOpenChange={() => setNewGame(null)}>
-          <DialogContent className="sm:max-w-[425px] bg-[#1a1f29] text-white">
+          <DialogContent className="sm:max-w-[500px] bg-[#1a1f29] text-white">
             <DialogHeader>
               <DialogTitle>How did you feel about {newGame?.name}?</DialogTitle>
             </DialogHeader>
-            <div className="flex justify-around mt-4">
+            <div className="flex justify-center gap-4 mt-4">
               <Button
                 onClick={() => handleInitialFeedback("enjoyed it")}
-                className="bg-green-600 hover:bg-green-700 px-4"
+                className="bg-green-600 hover:bg-green-700 px-4 w-[120px]"
               >
-                Enjoyed It
+                Good
               </Button>
               <Button
                 onClick={() => handleInitialFeedback("thought it was ok")}
-                className="bg-yellow-600 hover:bg-yellow-700 px-4"
+                className="bg-yellow-600 hover:bg-yellow-700 px-4 w-[120px]"
               >
-                Thought It Was OK
+                Mid
               </Button>
               <Button
                 onClick={() => handleInitialFeedback("did not like it")}
-                className="bg-red-600 hover:bg-red-700 px-4"
+                className="bg-red-600 hover:bg-red-700 px-4 w-[120px]"
               >
-                Did Not Like It
+                Horrible
               </Button>
             </div>
           </DialogContent>
@@ -374,8 +439,9 @@ export default function RatedPage() {
                 <img
                   src={newGame?.image_url || "/placeholder.svg"}
                   alt={`${newGame?.name} logo`}
-                  width={64}
-                  height={64}
+                  width={100}
+                  height={100}
+                  loading = "lazy"
                   className="object-contain mx-auto mb-2"
                 />
                 <p>{newGame?.name}</p>
@@ -385,9 +451,10 @@ export default function RatedPage() {
                 <img
                   src={comparisonGames[comparisonIndex]?.imageUrl || "/placeholder.svg"}
                   alt={`${comparisonGames[comparisonIndex]?.name} logo`}
-                  width={64}
-                  height={64}
+                  width={100}
+                  height={100}
                   className="object-contain mx-auto mb-2"
+                  loading = "lazy"
                 />
                 <p>{comparisonGames[comparisonIndex]?.name}</p>
               </div>
@@ -429,54 +496,58 @@ export default function RatedPage() {
               <CardDescription className="text-gray-400">Here are your ranked games</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="rounded-md border border-purple-800">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-gray-400">Game</TableHead>
-                      <TableHead className="text-gray-400">Name</TableHead>
-                      <TableHead className="text-gray-400">Rank</TableHead>
-                      <TableHead className="text-gray-400">Rating</TableHead>
-                      <TableHead className="text-gray-400">Genre</TableHead>
-                      {isRemovalMode && <TableHead className="text-gray-400 w-[50px]" />}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ratedGames.map((game, index) => (
-                      <TableRow key={index} className="border-purple-800 hover:bg-purple-900/20">
-                        <TableCell>
-                          <img
-                            src={game.imageUrl || "/placeholder.svg"}
-                            alt={`${game.name} logo`}
-                            width={48}
-                            height={48}
-                            className="object-contain"
-                          />
-                        </TableCell>
-                        <TableCell className="text-white">{game.name}</TableCell>
-                        <TableCell className="font-medium text-white">{game.rank}</TableCell>
-                        <TableCell className="text-white">{game.rating.toFixed(2)}</TableCell>
-                        <TableCell className="text-gray-300">{game.genre}</TableCell>
-                        {isRemovalMode && (
+              <div className="flex flex-col gap-4">
+                <SearchInput value={searchQuery} onChange={setSearchQuery} />
+                <div className="rounded-md border border-purple-800">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-gray-400">Game</TableHead>
+                        <TableHead className="text-gray-400">Name</TableHead>
+                        <TableHead className="text-gray-400">Rank</TableHead>
+                        <TableHead className="text-gray-400">Rating</TableHead>
+                        <TableHead className="text-gray-400">Genre</TableHead>
+                        {isRemovalMode && <TableHead className="text-gray-400 w-[50px]" />}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredRatedGames.map((game, index) => (
+                        <TableRow key={index} className="border-purple-800 hover:bg-purple-900/20">
                           <TableCell>
-                            <input
-                              type="checkbox"
-                              checked={selectedGames.includes(game.name)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedGames([...selectedGames, game.name])
-                                } else {
-                                  setSelectedGames(selectedGames.filter((name) => name !== game.name))
-                                }
-                              }}
-                              className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-600"
+                            <img
+                              src={game.imageUrl || "/placeholder.svg"}
+                              alt={`${game.name} logo`}
+                              width={80}
+                              height={80}
+                              className="object-contain"
+                              loading = "lazy"
                             />
                           </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                          <TableCell className="text-white">{game.name}</TableCell>
+                          <TableCell className="font-medium text-white">{game.rank}</TableCell>
+                          <TableCell className="text-white">{game.rating.toFixed(2)}</TableCell>
+                          <TableCell className="text-gray-300">{game.genre}</TableCell>
+                          {isRemovalMode && (
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                checked={selectedGames.includes(game.name)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedGames([...selectedGames, game.name])
+                                  } else {
+                                    setSelectedGames(selectedGames.filter((name) => name !== game.name))
+                                  }
+                                }}
+                                className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-600"
+                              />
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
             </CardContent>
           </Card>
